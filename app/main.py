@@ -4,8 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.swagger import custom_openapi
-
 from app.db.session import Base, engine
 
 from app.api.routes.auth import router as auth_router
@@ -30,26 +28,39 @@ from app import models  # noqa: F401
 settings = get_settings()
 
 
+# ============================================================
+# LIFESPAN
+# ============================================================
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Création automatique des tables uniquement en développement.
+    # En production, Alembic gère la base de données.
     if settings.app_env == "development":
-        Base.metadata.create_all(
-            bind=engine
-        )
+        Base.metadata.create_all(bind=engine)
 
     yield
 
 
+# ============================================================
+# APPLICATION FASTAPI
+# ============================================================
+
 app = FastAPI(
     title=settings.app_name,
+    description="API officielle du MNPC-SABOUWA",
     version="1.0.0",
     debug=settings.debug,
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 
-app.openapi = lambda: custom_openapi(app)
-
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,66 +71,46 @@ app.add_middleware(
 )
 
 
-# =========================
-# Routes API
-# =========================
+# ============================================================
+# ROUTES API
+# ============================================================
 
-app.include_router(
-    auth_router
-)
-
-app.include_router(
-    member_router
-)
-
-app.include_router(
-    organization_router
-)
-
-app.include_router(
-    organization_responsible_router
-)
-
-app.include_router(
-    statistic_router
-)
-
-app.include_router(
-    admin_router
-)
-
-app.include_router(
-    finance_router
-)
-
-app.include_router(
-    membership_router
-)
-
-app.include_router(
-    membership_payment_router
-)
-
-app.include_router(
-    document_router
-)
-
-app.include_router(
-    chat_router
-)
+app.include_router(auth_router)
+app.include_router(member_router)
+app.include_router(organization_router)
+app.include_router(organization_responsible_router)
+app.include_router(statistic_router)
+app.include_router(admin_router)
+app.include_router(finance_router)
+app.include_router(membership_router)
+app.include_router(membership_payment_router)
+app.include_router(document_router)
+app.include_router(chat_router)
 
 
-@app.get("/")
+# ============================================================
+# ROUTE PRINCIPALE
+# ============================================================
+
+@app.get("/", tags=["System"])
 def home():
     return {
-        "application": "MNPC SABOUWA",
+        "application": "MNPC-SABOUWA",
         "status": "API opérationnelle",
         "version": "1.0.0",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "health": "/health",
     }
 
 
-@app.get("/health")
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@app.get("/health", tags=["System"])
 def health():
     return {
         "status": "ok",
+        "application": "MNPC-SABOUWA",
     }

@@ -5,6 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+
+    # ==========================================
+    # APPLICATION
+    # ==========================================
+
     app_name: str = Field(
         default="MNPC SABOUWA API",
         validation_alias="APP_NAME",
@@ -20,6 +25,11 @@ class Settings(BaseSettings):
         validation_alias="DEBUG",
     )
 
+
+    # ==========================================
+    # BASE DE DONNEES
+    # ==========================================
+
     database_url: str = Field(
         default=(
             "postgresql+psycopg://"
@@ -27,6 +37,11 @@ class Settings(BaseSettings):
         ),
         validation_alias="DATABASE_URL",
     )
+
+
+    # ==========================================
+    # JWT / SECURITE
+    # ==========================================
 
     secret_key: str = Field(
         default="CHANGE_THIS_SECRET_KEY",
@@ -45,6 +60,11 @@ class Settings(BaseSettings):
         validation_alias="JWT_REFRESH_DAYS",
     )
 
+
+    # ==========================================
+    # VERIFICATION EMAIL
+    # ==========================================
+
     verification_code_minutes: int = Field(
         default=10,
         validation_alias="VERIFICATION_CODE_MINUTES",
@@ -55,10 +75,36 @@ class Settings(BaseSettings):
         validation_alias="VERIFICATION_MAX_ATTEMPTS",
     )
 
+
+    # ==========================================
+    # EMAIL / RESEND
+    # ==========================================
+
     email_mode: str = Field(
         default="console",
         validation_alias="EMAIL_MODE",
     )
+
+    resend_api_key: str = Field(
+        default="",
+        validation_alias="RESEND_API_KEY",
+    )
+
+    resend_from_email: str = Field(
+        default="onboarding@resend.dev",
+        validation_alias="RESEND_FROM_EMAIL",
+    )
+
+    resend_from_name: str = Field(
+        default="MNPC SABOUWA",
+        validation_alias="RESEND_FROM_NAME",
+    )
+
+
+    # ==========================================
+    # SMTP
+    # Conservé pour compatibilité
+    # ==========================================
 
     smtp_host: str = Field(
         default="",
@@ -90,12 +136,25 @@ class Settings(BaseSettings):
         validation_alias="SMTP_FROM_NAME",
     )
 
-    smtp_use_ssl: bool = False
+    smtp_use_ssl: bool = Field(
+        default=False,
+        validation_alias="SMTP_USE_SSL",
+    )
+
+
+    # ==========================================
+    # CORS
+    # ==========================================
 
     cors_origins: str = Field(
         default="*",
         validation_alias="CORS_ORIGINS",
     )
+
+
+    # ==========================================
+    # CONFIGURATION PYDANTIC
+    # ==========================================
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -103,8 +162,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+
     @property
     def cors_origin_list(self) -> list[str]:
+
         if self.cors_origins.strip() == "*":
             return ["*"]
 

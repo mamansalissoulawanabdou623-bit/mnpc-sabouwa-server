@@ -1,6 +1,4 @@
-import smtplib
-import ssl
-from email.message import EmailMessage
+import httpx
 
 from app.core.config import get_settings
 
@@ -32,8 +30,10 @@ def send_verification_email(
     )
 
 
-    # MODE DEVELOPPEMENT
-    # Affichage du code dans le terminal serveur
+    # ==========================================
+    # MODE DEVELOPPEMENT : CONSOLE
+    # ==========================================
+
     if settings.email_mode.lower() == "console":
 
         print("\n========== EMAIL VERIFICATION ==========")
@@ -46,81 +46,77 @@ def send_verification_email(
         return
 
 
-    # MODE PRODUCTION SMTP
-    if settings.email_mode.lower() != "smtp":
+    # ==========================================
+    # MODE PRODUCTION : RESEND
+    # ==========================================
 
-        raise RuntimeError(
-            "EMAIL_MODE doit etre 'console' ou 'smtp'."
-        )
+    if settings.email_mode.lower() == "resend":
 
+        if not settings.resend_api_key:
 
-    required_settings = (
-        settings.smtp_host,
-        settings.smtp_username,
-        settings.smtp_password,
-        settings.smtp_from_email,
-    )
-
-
-    if not all(required_settings):
-
-        raise RuntimeError(
-            "La configuration SMTP est incomplete."
-        )
-
-
-    message = EmailMessage()
-
-    message["Subject"] = subject
-
-    message["From"] = (
-        f"{settings.smtp_from_name} "
-        f"<{settings.smtp_from_email}>"
-    )
-
-    message["To"] = recipient
-
-    message.set_content(body)
-
-
-    if settings.smtp_use_ssl:
-
-        context = ssl.create_default_context()
-
-        with smtplib.SMTP_SSL(
-            settings.smtp_host,
-            settings.smtp_port,
-            timeout=30,
-            context=context,
-        ) as smtp:
-
-            smtp.login(
-                settings.smtp_username,
-                settings.smtp_password,
+            raise RuntimeError(
+                "RESEND_API_KEY est manquante."
             )
 
-            smtp.send_message(message)
+
+        payload = {
+            "from": (
+                f"{settings.resend_from_name} "
+                f"<{settings.resend_from_email}>"
+            ),
+            "to": [recipient],
+            "subject": subject,
+            "text": body,
+        }
+
+
+        headers = {
+            "Authorization": (
+                f"Bearer {settings.resend_api_key}"
+            ),
+            "Content-Type": "application/json",
+        }
+
+
+        try:
+
+            response = httpx.post(
+                "https://api.resend.com/emails",
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+
+
+        except httpx.RequestError as exc:
+
+            raise RuntimeError(
+                "Impossible de contacter le service "
+                "d'envoi d'e-mails."
+            ) from exc
+
+
+        if response.status_code >= 400:
+
+            raise RuntimeError(
+                "Erreur Resend : "
+                f"{response.status_code} - "
+                f"{response.text}"
+            )
+
+
+        print(
+            f"E-mail de verification envoye a : "
+            f"{recipient}"
+        )
 
         return
 
 
-    with smtplib.SMTP(
-        settings.smtp_host,
-        settings.smtp_port,
-        timeout=30,
-    ) as smtp:
+    # ==========================================
+    # MODE INVALIDE
+    # ==========================================
 
-        smtp.ehlo()
-
-        smtp.starttls(
-            context=ssl.create_default_context()
-        )
-
-        smtp.ehlo()
-
-        smtp.login(
-            settings.smtp_username,
-            settings.smtp_password,
-        )
-
-        smtp.send_message(message)
+    raise RuntimeError(
+        "EMAIL_MODE doit etre 'console' ou 'resend'."
+    )
