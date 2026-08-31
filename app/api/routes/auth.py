@@ -6,26 +6,30 @@ from fastapi import (
     HTTPException,
     status,
 )
+
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
 )
+
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
+
 from app.schemas.auth import (
     AuthResponse,
     ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
     RefreshTokenRequest,
+    RegisterRequest,
     RegistrationResponse,
     TokenResponse,
     UserResponse,
     VerifyEmailRequest,
-    RegisterRequest,
 )
+
 from app.services.auth_service import AuthService
 
 
@@ -40,10 +44,17 @@ router = APIRouter(
 
 
 # ============================================================
-# AUTHENTIFICATION BEARER POUR SWAGGER
+# AUTHENTIFICATION BEARER JWT
 # ============================================================
 
-security = HTTPBearer()
+security = HTTPBearer(
+    scheme_name="BearerAuth",
+    description=(
+        "Entrez votre access token JWT. "
+        "Swagger ajoutera automatiquement : "
+        "Authorization: Bearer <token>"
+    ),
+)
 
 
 # ============================================================
@@ -79,7 +90,7 @@ def register(
 
 
 # ============================================================
-# VERIFICATION DE L'EMAIL
+# VERIFICATION EMAIL
 # ============================================================
 
 @router.post(
@@ -100,7 +111,6 @@ def verify_email(
         )
 
     except ValueError as exc:
-
         print(
             "ERREUR VERIFICATION EMAIL :",
             str(exc),
@@ -113,7 +123,7 @@ def verify_email(
 
 
 # ============================================================
-# RENVOI DU CODE DE VERIFICATION
+# RENVOI CODE VERIFICATION
 # ============================================================
 
 @router.post(
@@ -128,13 +138,11 @@ def resend_verification(
     service = AuthService(db)
 
     try:
-
         service.resend_verification(
             email=data.email,
         )
 
     except RuntimeError as exc:
-
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
@@ -164,18 +172,15 @@ def login(
     service = AuthService(db)
 
     try:
-
         return service.login(data)
 
     except PermissionError as exc:
-
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
 
     except ValueError as exc:
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -198,13 +203,11 @@ def refresh(
     service = AuthService(db)
 
     try:
-
         return service.refresh(
             data.refresh_token,
         )
 
     except ValueError as exc:
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -259,18 +262,6 @@ def forgot_password(
 # ============================================================
 # UTILISATEUR CONNECTE
 # ============================================================
-#
-# Cette route utilise HTTPBearer.
-#
-# Swagger affichera automatiquement :
-#
-#       Authorize 🔒
-#
-# Après avoir entré le token, Swagger enverra :
-#
-#       Authorization: Bearer <access_token>
-#
-# ============================================================
 
 @router.get(
     "/me",
@@ -284,79 +275,77 @@ def me(
 ) -> UserResponse:
 
     # --------------------------------------------------------
-    # Récupération du JWT fourni par Swagger / Flutter
+    # TOKEN
     # --------------------------------------------------------
 
     token = credentials.credentials
 
     # --------------------------------------------------------
-    # Décodage et vérification du JWT
+    # DECODAGE JWT
     # --------------------------------------------------------
 
     try:
-
         payload = decode_token(token)
 
-        # Le endpoint /me accepte uniquement
-        # un ACCESS TOKEN.
-        #
-        # Un refresh token ne doit pas être accepté ici.
-
+        # Seul un access token est accepté.
         if payload.get("type") != "access":
-
             raise ValueError(
                 "Le token fourni n'est pas un access token."
             )
-
-        # ----------------------------------------------------
-        # Récupération de l'identifiant utilisateur
-        # ----------------------------------------------------
 
         user_id = uuid.UUID(
             str(payload.get("sub")),
         )
 
     except Exception as exc:
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Jeton d'acces invalide.",
         ) from exc
 
     # --------------------------------------------------------
-    # Recherche de l'utilisateur
+    # RECHERCHE UTILISATEUR
     # --------------------------------------------------------
 
     service = AuthService(db)
 
     try:
-
         user = service.get_user(
             user_id,
         )
 
     except ValueError as exc:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 
     # --------------------------------------------------------
-    # Vérification de l'adresse email
+    # EMAIL
     # --------------------------------------------------------
 
     if not user.email_verified:
-
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Adresse e-mail non verifiee.",
         )
 
     # --------------------------------------------------------
-    # Vérification du statut du compte
+    # STATUT COMPTE
     # --------------------------------------------------------
 
     if user.account_status in {
         "SUSPENDED",
-        "DIS
+        "DISABLED",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Compte non autorise.",
+        )
+
+    # --------------------------------------------------------
+    # REPONSE
+    # --------------------------------------------------------
+
+    return service.to_response(user)
+

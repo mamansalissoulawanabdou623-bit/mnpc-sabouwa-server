@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from app.core.config import get_settings
 from app.db.session import Base, engine
@@ -56,6 +57,46 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+
+# ============================================================
+# OPENAPI — AUTHENTIFICATION BEARER JWT
+# ============================================================
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.app_name,
+        version="1.0.0",
+        description="API officielle du MNPC-SABOUWA",
+        routes=app.routes,
+    )
+
+    openapi_schema.setdefault("components", {})
+    openapi_schema["components"].setdefault(
+        "securitySchemes",
+        {},
+    )
+
+    openapi_schema["components"]["securitySchemes"]["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": (
+            "Entrez votre access token JWT. "
+            "Swagger ajoutera automatiquement "
+            "Authorization: Bearer <token>."
+        ),
+    }
+
+    app.openapi_schema = openapi_schema
+
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 # ============================================================
